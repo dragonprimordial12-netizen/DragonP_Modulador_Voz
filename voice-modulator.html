@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎙️ Modulador de Voz — Dragón Primordial</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+:root{
+  --bg:#05040e;--panel:#0a0918;--border:rgba(140,80,255,0.15);
+  --purple:#9b40ff;--purple-dim:rgba(155,64,255,0.3);--purple-glow:rgba(155,64,255,0.07);
+  --cyan:#00e5ff;--gold:#ffd060;--red:#ff3060;--green:#00ff88;
+  --text:#ccc0e8;--muted:#5a5070;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{min-height:100vh;}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Rajdhani',sans-serif;font-size:1rem;
+  overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% 0%,rgba(155,64,255,0.08) 0%,transparent 70%),
+    radial-gradient(ellipse 40% 30% at 80% 80%,rgba(0,229,255,0.04) 0%,transparent 60%);
+  pointer-events:none;z-index:0;
+}
+body::after{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(140,80,255,0.02) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(140,80,255,0.02) 1px,transparent 1px);
+  background-size:50px 50px;pointer-events:none;z-index:0;
+}
+
+/* HEADER */
+header{
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1.2rem 2.5rem;border-bottom:1px solid var(--border);
+  background:rgba(5,4,14,0.96);backdrop-filter:blur(12px);
+}
+.logo{
+  font-family:'Orbitron',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.12em;
+  background:linear-gradient(90deg,var(--purple),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo span{font-weight:400;-webkit-text-fill-color:var(--muted);color:var(--muted);}
+.mic-status{
+  display:flex;align-items:center;gap:0.6rem;
+  font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:0.15em;
+  color:var(--muted);
+}
+.mic-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:all 0.3s;}
+.mic-dot.active{background:var(--green);box-shadow:0 0 10px var(--green);animation:blinkDot 1.5s infinite;}
+
+/* LAYOUT */
+.app{
+  position:relative;z-index:1;
+  max-width:1080px;margin:0 auto;padding:2rem 1.5rem 5rem;
+  display:grid;grid-template-columns:1fr 300px;gap:1.5rem;align-items:start;
+}
+@media(max-width:800px){.app{grid-template-columns:1fr;}}
+
+/* PANEL */
+.panel{
+  background:var(--panel);border:1px solid var(--border);
+  padding:1.5rem;position:relative;overflow:hidden;
+}
+.panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--purple-dim),transparent);
+}
+.panel-title{
+  font-family:'Orbitron',sans-serif;font-size:0.68rem;
+  letter-spacing:0.3em;text-transform:uppercase;color:var(--purple);
+  margin-bottom:1.2rem;display:flex;align-items:center;gap:0.6rem;
+}
+.panel-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,var(--border),transparent);}
+
+/* VISUALIZER */
+.viz-wrap{
+  background:rgba(0,0,0,0.5);border:1px solid var(--border);
+  position:relative;overflow:hidden;margin-bottom:1rem;
+}
+canvas#viz{display:block;width:100%;height:140px;}
+.viz-idle{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:'Share Tech Mono',monospace;font-size:0.7rem;letter-spacing:0.2em;
+  color:var(--muted);text-transform:uppercase;pointer-events:none;transition:opacity 0.3s;
+}
+.viz-idle.hidden{opacity:0;}
+
+/* BIG START BTN */
+.btn-start{
+  width:100%;padding:1.2rem;
+  font-family:'Orbitron',sans-serif;font-size:0.9rem;font-weight:700;
+  letter-spacing:0.2em;text-transform:uppercase;
+  border:none;cursor:pointer;transition:all 0.3s;
+  clip-path:polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%);
+  margin-bottom:1rem;
+}
+.btn-start.off{
+  background:linear-gradient(135deg,#3a10a0,#7030e0);color:#fff;
+  box-shadow:0 0 30px rgba(130,60,255,0.3);
+}
+.btn-start.off:hover{box-shadow:0 0 50px rgba(155,64,255,0.5);transform:translateY(-2px);}
+.btn-start.on{
+  background:linear-gradient(135deg,#800020,#ff3060);color:#fff;
+  box-shadow:0 0 30px rgba(255,50,80,0.3);
+}
+
+/* PRESET GRID */
+.preset-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:0.7rem;
+  margin-bottom:1.2rem;
+}
+@media(max-width:500px){.preset-grid{grid-template-columns:repeat(2,1fr);}}
+
+.preset-btn{
+  background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.06);
+  padding:1rem 0.5rem;cursor:pointer;transition:all 0.22s;
+  text-align:center;font-family:'Rajdhani',sans-serif;position:relative;overflow:hidden;
+}
+.preset-btn:hover{border-color:var(--purple-dim);background:var(--purple-glow);}
+.preset-btn.active{border-color:var(--purple);background:rgba(155,64,255,0.1);box-shadow:0 0 20px rgba(155,64,255,0.1);}
+.preset-btn.active::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple);}
+.preset-icon{font-size:2rem;display:block;margin-bottom:0.4rem;line-height:1;}
+.preset-name{font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text);font-weight:600;display:block;}
+.preset-tag{font-size:0.58rem;color:var(--muted);display:block;margin-top:0.2rem;letter-spacing:0.05em;}
+
+/* SLIDERS */
+.slider-section{margin-bottom:1rem;}
+.ctrl-row{display:flex;align-items:center;gap:0.8rem;margin-bottom:0.8rem;}
+.ctrl-lbl{font-size:0.65rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);min-width:90px;}
+.ctrl-val{font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--purple);min-width:44px;text-align:right;}
+input[type=range]{
+  flex:1;-webkit-appearance:none;appearance:none;
+  height:2px;background:rgba(155,64,255,0.15);border-radius:0;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;
+  background:var(--purple);border-radius:0;cursor:pointer;
+  clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+  box-shadow:0 0 8px var(--purple-dim);
+}
+
+/* RECORD ROW */
+.rec-row{display:flex;gap:0.6rem;margin-top:0.5rem;}
+.btn-sm{
+  flex:1;padding:0.7rem;font-family:'Orbitron',sans-serif;
+  font-size:0.58rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;
+  border:1px solid;background:transparent;cursor:pointer;transition:all 0.25s;
+}
+.btn-rec{border-color:rgba(255,50,80,0.35);color:var(--red);}
+.btn-rec:hover{background:rgba(255,50,80,0.08);border-color:var(--red);}
+.btn-rec.recording{background:rgba(255,50,80,0.12);border-color:var(--red);animation:recPulse 1s ease-in-out infinite;}
+.btn-dl{border-color:rgba(0,255,136,0.3);color:var(--green);}
+.btn-dl:hover:not(:disabled){background:rgba(0,255,136,0.07);border-color:var(--green);}
+.btn-dl:disabled{opacity:0.25;cursor:not-allowed;}
+
+/* RIGHT PANEL */
+.info-cell{background:rgba(0,0,0,0.35);border:1px solid var(--border);padding:0.7rem 0.9rem;margin-bottom:0.5rem;}
+.info-key{font-size:0.57rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:0.25rem;}
+.info-val{font-family:'Share Tech Mono',monospace;font-size:0.9rem;color:var(--cyan);}
+
+/* TIMER */
+.timer{
+  font-family:'Share Tech Mono',monospace;font-size:2rem;
+  color:var(--purple);text-align:center;letter-spacing:0.15em;
+  padding:0.6rem;border:1px solid var(--border);
+  background:rgba(0,0,0,0.4);text-shadow:0 0 20px var(--purple-dim);
+  margin-bottom:0.8rem;
+}
+.rec-indicator{
+  display:flex;align-items:center;gap:0.5rem;justify-content:center;
+  font-size:0.62rem;letter-spacing:0.15em;color:var(--red);
+  text-transform:uppercase;font-weight:600;min-height:20px;
+  opacity:0;transition:opacity 0.3s;margin-bottom:0.8rem;
+}
+.rec-indicator.show{opacity:1;}
+.rec-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:recPulse 1s ease-in-out infinite;}
+
+/* LOG */
+.log-box{
+  background:rgba(0,0,0,0.5);border:1px solid var(--border);
+  padding:0.7rem;max-height:90px;overflow-y:auto;
+  font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--muted);line-height:1.8;
+}
+.log-box::-webkit-scrollbar{width:3px;}
+.log-box::-webkit-scrollbar-thumb{background:var(--purple-dim);}
+.log-ok{color:var(--green);}
+.log-info{color:var(--purple-dim);}
+.log-warn{color:var(--gold);}
+
+/* TIPS */
+.tip-box{
+  background:rgba(0,0,0,0.3);border:1px solid rgba(255,208,96,0.1);
+  border-left:2px solid rgba(255,208,96,0.3);
+  padding:0.9rem 1rem;margin-bottom:0.6rem;
+  font-family:'Rajdhani',sans-serif;font-size:0.85rem;
+  color:rgba(255,208,96,0.6);line-height:1.6;font-style:italic;
+}
+.tip-label{font-size:0.55rem;letter-spacing:0.25em;text-transform:uppercase;color:rgba(255,208,96,0.4);margin-bottom:0.4rem;font-style:normal;}
+
+/* PERMISSION WARNING */
+.perm-warn{
+  background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.2);
+  padding:1rem;font-size:0.82rem;color:rgba(255,208,96,0.7);
+  line-height:1.6;display:none;margin-bottom:1rem;
+}
+.perm-warn.show{display:block;}
+
+@keyframes blinkDot{0%,100%{opacity:1;}50%{opacity:0.3;}}
+@keyframes recPulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🎙️ VOZ<span> MODULATOR</span></span>
+  <div class="mic-status">
+    <span class="mic-dot" id="micDot"></span>
+    <span id="micLabel">SIN MICRÓFONO</span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- LEFT -->
+  <div style="display:flex;flex-direction:column;gap:1rem;">
+
+    <!-- WARNING -->
+    <div class="perm-warn" id="permWarn">
+      ⚠️ Necesitas dar permiso al micrófono cuando el navegador lo pida. Si no aparece, ve a la barra de dirección → 🔒 → Permisos del sitio → Micrófono → Permitir.
+    </div>
+
+    <!-- VISUALIZER -->
+    <div class="panel">
+      <p class="panel-title">🔊 Monitor de voz en tiempo real</p>
+      <div class="viz-wrap">
+        <canvas id="viz" height="140"></canvas>
+        <div class="viz-idle" id="vizIdle">— ACTIVA EL MICRÓFONO —</div>
+      </div>
+      <button class="btn-start off" id="startBtn" onclick="toggleMic()">🎙️ ACTIVAR MICRÓFONO</button>
+    </div>
+
+    <!-- PRESETS -->
+    <div class="panel">
+      <p class="panel-title">🎭 Presets de voz</p>
+      <div class="preset-grid" id="presetGrid">
+        <button class="preset-btn active" data-preset="dragon" onclick="selectPreset(this)">
+          <span class="preset-icon">🐉</span>
+          <span class="preset-name">Dragón</span>
+          <span class="preset-tag">Grave · Épico</span>
+        </button>
+        <button class="preset-btn" data-preset="deepdragon" onclick="selectPreset(this)">
+          <span class="preset-icon">🔥</span>
+          <span class="preset-name">Dragón Anciano</span>
+          <span class="preset-tag">Muy grave · Eco</span>
+        </button>
+        <button class="preset-btn" data-preset="vtuber" onclick="selectPreset(this)">
+          <span class="preset-icon">🦊</span>
+          <span class="preset-name">VTuber</span>
+          <span class="preset-tag">Agudo · Kawaii</span>
+        </button>
+        <button class="preset-btn" data-preset="vtuber2" onclick="selectPreset(this)">
+          <span class="preset-icon">🌸</span>
+          <span class="preset-name">VTuber Dulce</span>
+          <span class="preset-tag">Muy agudo · Suave</span>
+        </button>
+        <button class="preset-btn" data-preset="demon" onclick="selectPreset(this)">
+          <span class="preset-icon">👹</span>
+          <span class="preset-name">Demonio</span>
+          <span class="preset-tag">Distorsión · Grave</span>
+        </button>
+        <button class="preset-btn" data-preset="robot" onclick="selectPreset(this)">
+          <span class="preset-icon">🤖</span>
+          <span class="preset-name">Robot</span>
+          <span class="preset-tag">Metálico · Seco</span>
+        </button>
+        <button class="preset-btn" data-preset="echo" onclick="selectPreset(this)">
+          <span class="preset-icon">🌊</span>
+          <span class="preset-name">Eco Épico</span>
+          <span class="preset-tag">Reverb masivo</span>
+        </button>
+        <button class="preset-btn" data-preset="angel" onclick="selectPreset(this)">
+          <span class="preset-icon">👼</span>
+          <span class="preset-name">Angelical</span>
+          <span class="preset-tag">Suave · Etéreo</span>
+        </button>
+        <button class="preset-btn" data-preset="normal" onclick="selectPreset(this)">
+          <span class="preset-icon">🎤</span>
+          <span class="preset-name">Normal</span>
+          <span class="preset-tag">Sin efectos</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MANUAL CONTROLS -->
+    <div class="panel">
+      <p class="panel-title">⚙️ Ajuste manual</p>
+      <div class="slider-section">
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Tono (pitch)</span>
+          <input type="range" id="pitch" min="-24" max="24" value="-8" oninput="manualUpdate('pitch',this.value)">
+          <span class="ctrl-val" id="val-pitch">-8</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Reverb</span>
+          <input type="range" id="reverb" min="0" max="10" value="4" oninput="manualUpdate('reverb',this.value)">
+          <span class="ctrl-val" id="val-reverb">4</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Distorsión</span>
+          <input type="range" id="dist" min="0" max="10" value="2" oninput="manualUpdate('dist',this.value)">
+          <span class="ctrl-val" id="val-dist">2</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Delay</span>
+          <input type="range" id="delay" min="0" max="10" value="2" oninput="manualUpdate('delay',this.value)">
+          <span class="ctrl-val" id="val-delay">2</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Graves (bass)</span>
+          <input type="range" id="bass" min="-20" max="20" value="6" oninput="manualUpdate('bass',this.value)">
+          <span class="ctrl-val" id="val-bass">6</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Agudos (treble)</span>
+          <input type="range" id="treble" min="-20" max="20" value="-4" oninput="manualUpdate('treble',this.value)">
+          <span class="ctrl-val" id="val-treble">-4</span>
+        </div>
+      </div>
+
+      <!-- REC -->
+      <div class="rec-row">
+        <button class="btn-sm btn-rec" id="recBtn" onclick="toggleRecord()">⏺ GRABAR</button>
+        <button class="btn-sm btn-dl" id="dlBtn" onclick="downloadAudio()" disabled>⬇ DESCARGAR</button>
+      </div>
+    </div>
+
+    <!-- TIPS -->
+    <div class="panel">
+      <p class="panel-title">💡 Consejos</p>
+      <div class="tip-box">
+        <div class="tip-label">Para voz de Dragón</div>
+        Habla despacio y con voz grave. El preset baja el tono -8 semitonos y agrega eco. Si tu voz ya es grave, baja el pitch a -4.
+      </div>
+      <div class="tip-box">
+        <div class="tip-label">Para VTuber</div>
+        Habla con voz normal y relajada. El preset sube el tono +5. No fuerces la voz — el efecto hace el trabajo.
+      </div>
+      <div class="tip-box">
+        <div class="tip-label">Para descargar</div>
+        Activa el micrófono → selecciona tu preset → presiona GRABAR → habla → presiona STOP → descarga. El archivo sale en .webm (reproducible en Chrome, VLC, etc.)
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div style="display:flex;flex-direction:column;gap:1rem;">
+    <div class="panel">
+      <p class="panel-title">📊 Estado</p>
+      <div class="timer" id="timer">00:00</div>
+      <div class="rec-indicator" id="recIndicator"><span class="rec-dot"></span> GRABANDO</div>
+      <div class="info-cell"><span class="info-key">Preset activo</span><span class="info-val" id="info-preset">Dragón</span></div>
+      <div class="info-cell"><span class="info-key">Tono</span><span class="info-val" id="info-pitch">-8 st</span></div>
+      <div class="info-cell"><span class="info-key">Reverb</span><span class="info-val" id="info-reverb">40%</span></div>
+      <div class="info-cell"><span class="info-key">Distorsión</span><span class="info-val" id="info-dist">20%</span></div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">📋 Log</p>
+      <div class="log-box" id="logBox">
+        <div class="log-info">[ SYS ] Listo. Activa el micrófono.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────
+let micActive = false, isRecording = false;
+let mediaRecorder = null, recordedChunks = [], audioBlob = null;
+let timerInterval = null, seconds = 0;
+let animFrame = null;
+
+// Tone.js nodes
+let micInput = null, pitchShift = null, reverbFX = null, distFX = null, delayFX = null, bassEQ = null, trebleEQ = null, outputVol = null, streamDest = null;
+let analyser = null, analyserNode = null;
+let micStream = null;
+
+const PRESETS = {
+  dragon:    {name:'Dragón',         pitch:-8,  reverb:5, dist:2, delay:3, bass:8,  treble:-6},
+  deepdragon:{name:'Dragón Anciano', pitch:-14, reverb:8, dist:4, delay:5, bass:12, treble:-8},
+  vtuber:    {name:'VTuber',         pitch:5,   reverb:3, dist:0, delay:1, bass:-2, treble:4},
+  vtuber2:   {name:'VTuber Dulce',   pitch:9,   reverb:4, dist:0, delay:2, bass:-4, treble:6},
+  demon:     {name:'Demonio',        pitch:-10, reverb:6, dist:8, delay:4, bass:10, treble:-10},
+  robot:     {name:'Robot',          pitch:0,   reverb:1, dist:6, delay:6, bass:0,  treble:8},
+  echo:      {name:'Eco Épico',      pitch:-4,  reverb:10,dist:1, delay:8, bass:4,  treble:-2},
+  angel:     {name:'Angelical',      pitch:7,   reverb:8, dist:0, delay:3, bass:-6, treble:5},
+  normal:    {name:'Normal',         pitch:0,   reverb:0, dist:0, delay:0, bass:0,  treble:0},
+};
+let currentPreset = 'dragon';
+
+// ── LOG ───────────────────────────────────────
+function log(msg, cls='') {
+  const box = document.getElementById('logBox');
+  const el = document.createElement('div');
+  const t = new Date();
+  const ts = `${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+  el.className = cls; el.textContent = `[ ${ts} ] ${msg}`;
+  box.appendChild(el); box.scrollTop = box.scrollHeight;
+}
+
+// ── PRESET ────────────────────────────────────
+function selectPreset(el) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentPreset = el.dataset.preset;
+  const p = PRESETS[currentPreset];
+  applyPreset(p);
+  log(`Preset: ${p.name}`, 'log-ok');
+}
+
+function applyPreset(p) {
+  // Update sliders
+  document.getElementById('pitch').value = p.pitch;
+  document.getElementById('reverb').value = p.reverb;
+  document.getElementById('dist').value = p.dist;
+  document.getElementById('delay').value = p.delay;
+  document.getElementById('bass').value = p.bass;
+  document.getElementById('treble').value = p.treble;
+  document.getElementById('val-pitch').textContent = p.pitch;
+  document.getElementById('val-reverb').textContent = p.reverb;
+  document.getElementById('val-dist').textContent = p.dist;
+  document.getElementById('val-delay').textContent = p.delay;
+  document.getElementById('val-bass').textContent = p.bass;
+  document.getElementById('val-treble').textContent = p.treble;
+  // Update info
+  document.getElementById('info-preset').textContent = p.name;
+  document.getElementById('info-pitch').textContent = `${p.pitch} st`;
+  document.getElementById('info-reverb').textContent = `${p.reverb*10}%`;
+  document.getElementById('info-dist').textContent = `${p.dist*10}%`;
+  // Apply to nodes if active
+  if(pitchShift) pitchShift.pitch = p.pitch;
+  if(reverbFX) reverbFX.wet.value = p.reverb / 10;
+  if(distFX) distFX.wet.value = p.dist / 10;
+  if(delayFX) delayFX.wet.value = p.delay / 10;
+  if(bassEQ) bassEQ.gain.value = p.bass;
+  if(trebleEQ) trebleEQ.gain.value = p.treble;
+}
+
+function manualUpdate(param, val) {
+  document.getElementById('val-'+param).textContent = val;
+  document.getElementById('info-preset').textContent = 'Personalizado';
+  if(param==='pitch' && pitchShift) { pitchShift.pitch = parseInt(val); document.getElementById('info-pitch').textContent = `${val} st`; }
+  if(param==='reverb' && reverbFX) { reverbFX.wet.value = val/10; document.getElementById('info-reverb').textContent = `${val*10}%`; }
+  if(param==='dist' && distFX) { distFX.wet.value = val/10; document.getElementById('info-dist').textContent = `${val*10}%`; }
+  if(param==='delay' && delayFX) delayFX.wet.value = val/10;
+  if(param==='bass' && bassEQ) bassEQ.gain.value = parseFloat(val);
+  if(param==='treble' && trebleEQ) trebleEQ.gain.value = parseFloat(val);
+}
+
+// ── MIC + AUDIO CHAIN ────────────────────────
+async function toggleMic() {
+  if (!micActive) {
+    document.getElementById('permWarn').classList.add('show');
+    try {
+      await Tone.start();
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      document.getElementById('permWarn').classList.remove('show');
+
+      const p = PRESETS[currentPreset];
+
+      // Build chain
+      pitchShift = new Tone.PitchShift({ pitch: p.pitch, windowSize: 0.1 });
+      reverbFX   = new Tone.Reverb({ decay: 3, wet: p.reverb / 10 });
+      distFX     = new Tone.Distortion({ distortion: 0.6, wet: p.dist / 10 });
+      delayFX    = new Tone.FeedbackDelay({ delayTime: '8n', feedback: 0.3, wet: p.delay / 10 });
+      bassEQ     = new Tone.Filter({ type: 'lowshelf', frequency: 200, gain: p.bass });
+      trebleEQ   = new Tone.Filter({ type: 'highshelf', frequency: 4000, gain: p.treble });
+      outputVol  = new Tone.Volume(0);
+
+      await reverbFX.generate();
+
+      // stream destination for recording
+      streamDest = Tone.getContext().rawContext.createMediaStreamDestination();
+
+      // analyser for viz
+      analyserNode = Tone.getContext().rawContext.createAnalyser();
+      analyserNode.fftSize = 512;
+
+      micInput = new Tone.UserMedia();
+      await micInput.open();
+
+      micInput.chain(pitchShift, bassEQ, trebleEQ, distFX, reverbFX, delayFX, outputVol, Tone.getDestination());
+      outputVol.connect(Tone.getContext().rawContext.createMediaStreamDestination());
+
+      // connect analyser
+      const src = Tone.getContext().rawContext.createMediaStreamSource(micStream);
+      const srcProcessed = outputVol.output;
+      outputVol.connect(analyserNode);
+      analyserNode.connect(streamDest);
+
+      micActive = true;
+      document.getElementById('startBtn').textContent = '⏹ DESACTIVAR MICRÓFONO';
+      document.getElementById('startBtn').classList.replace('off','on');
+      document.getElementById('micDot').classList.add('active');
+      document.getElementById('micLabel').textContent = 'MICRÓFONO ACTIVO';
+      document.getElementById('vizIdle').classList.add('hidden');
+      startViz();
+      log('Micrófono activo — cadena de efectos lista.', 'log-ok');
+
+    } catch(e) {
+      document.getElementById('permWarn').classList.add('show');
+      log('Error: ' + e.message, 'log-warn');
+    }
+  } else {
+    stopMic();
+  }
+}
+
+function stopMic() {
+  if(isRecording) toggleRecord();
+  if(micInput) { try { micInput.close(); micInput.dispose(); } catch(e){} }
+  if(pitchShift) { try{pitchShift.dispose();}catch(e){} }
+  if(reverbFX)   { try{reverbFX.dispose();}catch(e){} }
+  if(distFX)     { try{distFX.dispose();}catch(e){} }
+  if(delayFX)    { try{delayFX.dispose();}catch(e){} }
+  if(bassEQ)     { try{bassEQ.dispose();}catch(e){} }
+  if(trebleEQ)   { try{trebleEQ.dispose();}catch(e){} }
+  if(outputVol)  { try{outputVol.dispose();}catch(e){} }
+  if(micStream)  { micStream.getTracks().forEach(t => t.stop()); }
+  micInput=pitchShift=reverbFX=distFX=delayFX=bassEQ=trebleEQ=outputVol=streamDest=analyserNode=micStream=null;
+  micActive = false;
+  document.getElementById('startBtn').textContent = '🎙️ ACTIVAR MICRÓFONO';
+  document.getElementById('startBtn').classList.replace('on','off');
+  document.getElementById('micDot').classList.remove('active');
+  document.getElementById('micLabel').textContent = 'SIN MICRÓFONO';
+  document.getElementById('vizIdle').classList.remove('hidden');
+  stopViz();
+  log('Micrófono desactivado.', 'log-warn');
+}
+
+// ── VISUALIZER ───────────────────────────────
+function startViz() {
+  const canvas = document.getElementById('viz');
+  const ctx = canvas.getContext('2d');
+  const DPR = window.devicePixelRatio||1;
+  canvas.width = canvas.offsetWidth * DPR;
+  canvas.height = canvas.offsetHeight * DPR;
+  ctx.scale(DPR, DPR);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  let t = 0;
+
+  function draw() {
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = 'rgba(5,4,14,0.75)';
+    ctx.fillRect(0,0,W,H);
+
+    let dataArr = null;
+    if(analyserNode) {
+      dataArr = new Uint8Array(analyserNode.frequencyBinCount);
+      analyserNode.getByteFrequencyData(dataArr);
+    }
+
+    const bars = 60;
+    const bw = W / bars;
+    for(let i=0;i<bars;i++){
+      let h;
+      if(dataArr) {
+        const idx = Math.floor(i * dataArr.length / bars);
+        h = (dataArr[idx]/255) * (H-8) * 1.1;
+      } else {
+        h = Math.max(3, ((Math.sin(t*2+i*0.5)+1)/2)*40);
+      }
+      h = Math.max(3, h);
+      const g = ctx.createLinearGradient(0, H-h, 0, H);
+      g.addColorStop(0,'rgba(155,64,255,0.9)');
+      g.addColorStop(0.5,'rgba(100,40,200,0.7)');
+      g.addColorStop(1,'rgba(50,10,100,0.3)');
+      ctx.fillStyle = g;
+      ctx.fillRect(i*bw+1, H-h, bw-2, h);
+    }
+
+    // waveform line
+    ctx.strokeStyle = 'rgba(0,229,255,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for(let x=0;x<W;x++){
+      const y = H/2 + Math.sin(t*3+x*0.06)*12 + Math.sin(t*1.5+x*0.02)*6;
+      x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    t += 0.04;
+    animFrame = requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function stopViz() {
+  if(animFrame) cancelAnimationFrame(animFrame);
+  const canvas = document.getElementById('viz');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+// ── RECORDING ────────────────────────────────
+function toggleRecord() {
+  if(!micActive){ log('Activa el micrófono primero.','log-warn'); return; }
+  if(!isRecording) {
+    recordedChunks = []; audioBlob = null;
+    document.getElementById('dlBtn').disabled = true;
+    try {
+      // record from the output stream destination
+      const outStream = streamDest ? streamDest.stream : null;
+      if(!outStream){ log('Sin destino de grabación.','log-warn'); return; }
+      mediaRecorder = new MediaRecorder(outStream);
+      mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(recordedChunks,{type:'audio/webm'});
+        document.getElementById('dlBtn').disabled = false;
+        log('Grabación lista para descargar.','log-ok');
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      document.getElementById('recBtn').textContent = '⏹ STOP';
+      document.getElementById('recBtn').classList.add('recording');
+      document.getElementById('recIndicator').classList.add('show');
+      startTimer();
+      log('Grabando...','log-warn');
+    } catch(e){ log('Error grabación: '+e.message,'log-warn'); }
+  } else {
+    isRecording = false;
+    mediaRecorder.stop();
+    document.getElementById('recBtn').textContent = '⏺ GRABAR';
+    document.getElementById('recBtn').classList.remove('recording');
+    document.getElementById('recIndicator').classList.remove('show');
+    stopTimer();
+    log('Grabación detenida.','log-warn');
+  }
+}
+
+function downloadAudio() {
+  if(!audioBlob){ log('Sin grabación.','log-warn'); return; }
+  const url = URL.createObjectURL(audioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  const preset = PRESETS[currentPreset].name.toLowerCase().replace(' ','_');
+  a.download = `voz_${preset}_${Date.now()}.webm`;
+  a.click();
+  URL.revokeObjectURL(url);
+  log('Descargando: ' + a.download,'log-ok');
+}
+
+// ── TIMER ─────────────────────────────────────
+function startTimer(){
+  seconds=0;
+  timerInterval=setInterval(()=>{
+    seconds++;
+    const m=String(Math.floor(seconds/60)).padStart(2,'0');
+    const s=String(seconds%60).padStart(2,'0');
+    document.getElementById('timer').textContent=`${m}:${s}`;
+  },1000);
+}
+function stopTimer(){clearInterval(timerInterval);document.getElementById('timer').textContent='00:00';}
+
+// INIT
+applyPreset(PRESETS['dragon']);
+</script>
+</body>
+</html>
